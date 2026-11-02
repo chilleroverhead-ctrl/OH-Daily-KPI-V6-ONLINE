@@ -1,0 +1,9 @@
+# Copy this to wrangler.toml and replace the database_id after creating D1.
+name = "oh-daily-kpi"
+pages_build_output_dir = "."
+compatibility_date = "2026-10-19"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "oh-daily-kpi-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"

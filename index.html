@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OH Daily KPI Dashboard</title>
+<style>
+:root{--blue:#1676b8;--green:#12a45a;--red:#e53935;--ink:#203040;--muted:#64748b;--line:#dbe3ea;--bg:#f4f7fa}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:15px "Segoe UI",Tahoma,sans-serif;color:var(--ink)}
+header{background:#fff;padding:18px 24px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+h1{font-size:21px;margin:0;color:#126da8}main{max-width:1200px;margin:22px auto;padding:0 16px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px;box-shadow:0 2px 8px #0b22330a}
+.row{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.field{display:flex;flex-direction:column;gap:5px;min-width:130px;flex:1}
+label{font-size:12px;color:var(--muted)}input,select,button{font:inherit;border:1px solid #cbd5e1;border-radius:7px;padding:9px;background:#fff;color:var(--ink)}
+input[type=color]{height:38px;padding:3px;width:56px}button{cursor:pointer;background:#f8fafc}button.primary{background:var(--blue);color:white;border-color:var(--blue)}button.danger{color:#b91c1c}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}.metrichead{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chartwrap{width:100%;overflow:auto}svg{display:block;min-width:600px;width:100%;height:390px}
+table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid var(--line);padding:8px;text-align:left}th{font-size:12px;color:var(--muted)}td input{width:100%;min-width:100px}
+.note{font-size:12px;color:var(--muted);line-height:1.5}.draggable-label{cursor:move;touch-action:none}.draggable-label:hover{filter:drop-shadow(0 0 2px #1676b8)}.pill{display:inline-block;background:#eaf4fb;color:#126da8;border-radius:20px;padding:4px 9px;font-size:12px;border:0;cursor:pointer}.metric-card{cursor:grab}.metric-card.dragging{opacity:.45}.metric-card.drag-over{outline:2px dashed #1676b8;outline-offset:2px}.order-hint{font-size:11px;color:#64748b;margin-left:6px}.chart-note-wrap{display:flex;justify-content:flex-end;margin:8px 0 10px}.chart-note-box{width:min(420px,100%);display:flex;flex-direction:column;gap:5px}.chart-note-box textarea{width:100%;min-height:58px;resize:vertical;border:1px solid #cbd5e1;border-radius:7px;padding:8px;font:13px inherit;color:var(--ink);background:#fbfdff}.chart-note-box label{align-self:flex-end;font-weight:600}
+@media(max-width:600px){header{padding:14px}main{padding:0 10px}.panel{padding:13px}h1{font-size:18px}}
+</style></head>
+<body>
+<header><h1 id="appTitle">OH Daily KPI Dashboard</h1><div class="toolbar"><button id="exportExcelBtn" class="primary">บันทึกเป็น Excel (.xlsx)</button><button id="exportBtn">ส่งออก CSV</button><button id="importBtn">นำเข้า CSV</button><input id="fileInput" type="file" accept=".csv,text/csv" hidden></div></header>
+<main>
+<section class="panel">
+<div class="row">
+<div class="field"><label>ชื่อรายงาน (แก้ไขได้)</label><input id="titleInput" value="อัตราการชำแหละบนราว (ตัว/MH)"></div>
+<div class="field"><label>เลือก KPI</label><select id="metricSelect"></select></div>
+<div class="field"><label>Target</label><input id="targetInput" type="number" step="any"></div>
+<div class="field"><label>หน่วย</label><input id="unitInput" value="ตัว/MH"></div>
+<div class="field" style="flex:0"><label>สีแท่ง Act</label><input id="barColor" type="color" value="#12a45a"></div>
+<button class="primary" id="saveMetric">บันทึกการตั้งค่า</button>
+</div>
+<div class="toolbar" style="margin-top:12px"><button id="addMetric">+ เพิ่ม KPI</button><button class="danger" id="deleteMetric">ลบ KPI ที่เลือก</button></div>
+</section>
+<section class="panel">
+<h3 style="margin:0 0 12px">บันทึกข้อมูลรายวัน</h3>
+<div class="row">
+<div class="field"><label>วันที่</label><input id="dateInput" type="date"></div>
+<div class="field"><label>Act (ผลจริง)</label><input id="actInput" type="number" step="any" placeholder="กรอกค่า Act"></div>
+<div class="field"><label>Target ของวัน (เว้นว่างใช้ Target KPI)</label><input id="dayTargetInput" type="number" step="any" placeholder="ไม่จำเป็น"></div>
+<div class="field"><label>หมายเหตุ</label><input id="noteInput" placeholder="รายละเอียดเพิ่มเติม"></div>
+<button class="primary" id="addRecord">เพิ่ม/ปรับปรุงข้อมูล</button>
+</div><p class="note">วันที่ซ้ำใน KPI เดียวกันจะปรับปรุงรายการเดิมให้ ไม่สร้างรายการซ้ำ</p>
+</section>
+<section class="panel"><h3 style="margin:0 0 12px">Scoreboard รวมทุก KPI</h3><div id="dashboard"></div><div class="note">แต่ละหัวข้อมีกราฟของตัวเอง: แท่ง = Act รายวัน • เส้นสีน้ำเงิน = Target หลัก (ปรับตาม Target รายวันที่กรอก) • เฉพาะกราฟต้นทุน OH บาท/kgFG แสดง Target KPI และเส้นประ Target Dynamic แยกกัน • ลากตัวเลข Act/Target และป้าย Target KPI เพื่อย้ายตำแหน่ง • ดับเบิลคลิกป้าย Target KPI เพื่อแก้ข้อความ • คลิกจำนวนวัน/ผ่าน Target เพื่อแก้ไข • ลากกราฟเพื่อจัดลำดับ • สีแท่งเลือกแยกแต่ละวันได้จากตาราง</div></section>
+<section class="panel">
+<div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">รายการข้อมูล (แก้ไข/ลบได้)</h3><button id="clearRecords" class="danger">ลบข้อมูล KPI นี้ทั้งหมด</button></div>
+<div style="overflow:auto"><table><thead><tr><th>วันที่</th><th>Act</th><th>Target</th><th>สีกราฟรายวัน</th><th>หมายเหตุ</th><th>จัดการ</th></tr></thead><tbody id="recordsBody"></tbody></table></div>
+</section>
+<p class="note">ฐานข้อมูลออนไลน์: Cloudflare D1 (ฐานข้อมูลแบบ SQLite) • ข้อมูลบันทึกอัตโนมัติและใช้ร่วมกันได้เมื่อเปิดเว็บไซต์เดียวกัน • ใช้ปุ่ม “บันทึกเป็น Excel” เพื่อดาวน์โหลดไฟล์ .xlsx</p><p id="dbStatus" class="note">กำลังเชื่อมต่อฐานข้อมูล SQLite…</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const uid=()=>Math.random().toString(36).slice(2,10);
+let state=JSON.parse(localStorage.getItem('ohkpi_v1')||'null')||{title:'OH Daily KPI Dashboard',metrics:[{id:uid(),name:'อัตราการชำแหละบนราว',unit:'ตัว/MH',target:96.88,color:'#12a45a',records:[]}],selected:null};
+if(!state.selected)state.selected=state.metrics[0].id;
+function save(){localStorage.setItem('ohkpi_v1',JSON.stringify(state));render();syncToSQLite()}
+let syncTimer=null,remoteReady=false;
+async function syncToSQLite(){if(!remoteReady)return;clearTimeout(syncTimer);syncTimer=setTimeout(async()=>{try{const r=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});if(!r.ok)throw new Error('HTTP '+r.status);$('dbStatus').textContent='เชื่อมต่อฐานข้อมูลออนไลน์แล้ว • บันทึกข้อมูลล่าสุดเรียบร้อย';}catch(e){$('dbStatus').textContent='บันทึกฐานข้อมูลออนไลน์ไม่สำเร็จ กรุณาตรวจสอบการตั้งค่า Cloudflare Pages และ D1';}},250)}
+async function initSQLite(){try{const r=await fetch('/api/state');if(!r.ok)throw new Error('HTTP '+r.status);const remote=await r.json();if(remote && remote.metrics && remote.metrics.length){state=remote;if(!state.selected||!state.metrics.some(m=>m.id===state.selected))state.selected=state.metrics[0]?.id;}else{const seed=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});if(!seed.ok)throw new Error('Initial save HTTP '+seed.status);}remoteReady=true;localStorage.setItem('ohkpi_v1',JSON.stringify(state));render();$('dbStatus').textContent='เชื่อมต่อฐานข้อมูลออนไลน์แล้ว • บันทึกข้อมูลอัตโนมัติ';}catch(e){$('dbStatus').textContent='ยังเชื่อมต่อฐานข้อมูลออนไลน์ไม่ได้ • ตรวจสอบว่าติดตั้ง Cloudflare Pages Functions และผูก D1 แล้ว';render();}}
+function metric(){return state.metrics.find(m=>m.id===state.selected)||state.metrics[0]}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function render(){
+ $('appTitle').textContent=state.title;$('titleInput').value=state.title;
+ $('metricSelect').innerHTML=state.metrics.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
+ $('metricSelect').value=state.selected;let m=metric();if(!m)return;
+ $('targetInput').value=m.target;$('unitInput').value=m.unit;$('barColor').value=m.color;
+ renderDashboard();renderRows();
+}
+function drawMetric(m,idx){
+ let data=[...m.records].sort((a,b)=>a.date.localeCompare(b.date));
+ let L=62,R=24,T=38,B=72,H=350; let W=Math.max(1000,data.length*72+L+R),plotH=H-T-B,plotW=W-L-R;
+ let vals=data.flatMap(d=>[+d.act, d.target==null?+m.target||0:+d.target]).concat([+m.target||0]),max=Math.max(1,...vals)*1.18;
+ let y=v=>T+plotH-(v/max)*plotH,parts=[];
+ for(let i=0;i<=5;i++){let v=max*i/5,yy=y(v);parts.push(`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#d9e0e6"/><text x="${L-9}" y="${yy+4}" text-anchor="end" font-size="12" fill="#64748b">${v.toFixed(1)}</text>`)}
+ const isOhCost = m.name.trim().toLowerCase().includes('ต้นทุนฝ่าย oh บาท/kgfg'.toLowerCase());
+ let slot=plotW/Math.max(data.length,1),bw=Math.min(35,slot*.58);
+ const targetAt=d=>d.target==null?(+m.target||0):(+d.target);
+ const targetPoints=data.map((d,i)=>{const center=L+i*slot+slot/2;return `${center},${y(targetAt(d))}`}).join(' ');
+ const hasDailyOverride=data.some(d=>d.target!=null && +d.target!==(+m.target||0));
+ if(isOhCost){
+   // OH cost keeps two distinct references: fixed KPI target and daily dynamic target.
+   let ty=y(+m.target||0);
+   const targetLabelX=(W-R-4)+(+(m.targetKpiLabelDx||0)),targetLabelY=Math.max(13,ty-7)+(+(m.targetKpiLabelDy||0));
+   const targetLabelPrefix=m.targetKpiLabelText==null?'Target KPI':m.targetKpiLabelText;
+   parts.push(`<line x1="${L}" y1="${ty}" x2="${W-R}" y2="${ty}" stroke="#1676b8" stroke-width="2.5" opacity=".85"/><text class="draggable-label target-kpi-label" data-label-type="targetKpi" data-metric-id="${esc(m.id)}" x="${targetLabelX}" y="${targetLabelY}" text-anchor="end" font-size="12" fill="#1676b8" title="ลากเพื่อย้าย • ดับเบิลคลิกเพื่อแก้ข้อความ">${esc(targetLabelPrefix)} ${esc(m.target)} ${esc(m.unit)}</text>`);
+   if(data.length && hasDailyOverride){
+     parts.push(`<polyline points="${targetPoints}" fill="none" stroke="#7dd3fc" stroke-width="2.5" stroke-dasharray="7 5" stroke-linecap="round" stroke-linejoin="round" opacity=".95"/>`);
+     parts.push(`<line x1="${W-R-150}" y1="${T+10}" x2="${W-R-112}" y2="${T+10}" stroke="#7dd3fc" stroke-width="2.5" stroke-dasharray="7 5"/><text x="${W-R-106}" y="${T+14}" font-size="11" fill="#64748b">Target Dynamic</text>`);
+   }
+ } else {
+   // All other KPIs use the primary solid Target line; it follows per-date Target edits.
+   if(data.length>1){
+     parts.push(`<polyline points="${targetPoints}" fill="none" stroke="#1676b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`);
+   } else {
+     const ty=y(data.length?targetAt(data[0]):(+m.target||0));
+     parts.push(`<line x1="${L}" y1="${ty}" x2="${W-R}" y2="${ty}" stroke="#1676b8" stroke-width="2.5" opacity=".85"/>`);
+   }
+   const latestTarget=data.length?targetAt(data[data.length-1]):(+m.target||0);
+   const primaryLabelX=(W-R-4)+(+(m.targetLabelDx||0)), primaryLabelY=Math.max(13,y(latestTarget)-7)+(+(m.targetLabelDy||0));
+   const primaryLabelText=m.targetLabelText==null?'Target':m.targetLabelText;
+   parts.push(`<text class="draggable-label primary-target-label" data-label-type="primaryTarget" data-metric-id="${esc(m.id)}" x="${primaryLabelX}" y="${primaryLabelY}" text-anchor="end" font-size="12" fill="#1676b8" title="ลากเพื่อย้าย • ดับเบิลคลิกเพื่อแก้ข้อความ">${esc(primaryLabelText)} ${esc(latestTarget)} ${esc(m.unit)}</text>`);
+ }
+ data.forEach((d,i)=>{let xx=L+i*slot+(slot-bw)/2,center=xx+bw/2,yy=y(+d.act),hh=T+plotH-yy,targetVal=d.target==null?(+m.target||0):(+d.target),targetY=y(targetVal),col=d.color||((+d.act >= targetVal)?m.color:'#e53935');
+ parts.push(`<rect x="${xx}" y="${yy}" width="${bw}" height="${Math.max(0,hh)}" fill="${col}" rx="1"/>`);
+ // Act label above its bar, staggered to reduce collisions
+ let labelY=Math.max(13,yy-7-(i%2)*15)+(+(d.actLabelDy)||0), actDx=+(d.actLabelDx)||0;
+ parts.push(`<text class="draggable-label" data-label-type="act" data-record-id="${d.id}" x="${center+actDx}" y="${labelY}" text-anchor="middle" font-size="12" font-weight="600" fill="#334155" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" title="ลากเพื่อย้ายตำแหน่งตัวเลข Act">${esc(d.act)}</text>`);
+ // Daily Target label: faint but readable, placed on the opposite side of the target level from Act when close
+ let actClose=Math.abs(yy-targetY)<30, targetLabelY;
+ if(actClose) targetLabelY = yy<=targetY ? Math.min(T+plotH-4,targetY+17) : Math.max(T+12,targetY-12);
+ else targetLabelY = targetY + (i%2===0 ? 14 : -10);
+ targetLabelY=Math.max(T+11,Math.min(T+plotH-3,targetLabelY))+(+(d.targetLabelDy)||0); let targetDx=+(d.targetLabelDx)||0;
+ parts.push(`<text class="draggable-label" data-label-type="target" data-record-id="${d.id}" x="${center+targetDx}" y="${targetLabelY}" text-anchor="middle" font-size="10.5" font-weight="500" fill="#526579" opacity=".78" paint-order="stroke" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" title="ลากเพื่อย้ายตำแหน่งตัวเลข Target รายวัน">T ${esc(targetVal)}</text>`);
+ let label=d.date.slice(8,10)+'/'+d.date.slice(5,7)+'/'+d.date.slice(0,4);parts.push(`<text transform="translate(${center},${H-B+17}) rotate(-45)" text-anchor="end" font-size="12" fill="#475569">${label}</text>`);});
+ parts.push(`<text x="${L}" y="${H-8}" font-size="12" fill="#64748b">DATE</text>`);
+ return parts.join('');
+}
+function renderDashboard(){
+ $('dashboard').innerHTML=state.metrics.map((m,i)=>{
+ let passed=m.records.filter(d=>+d.act>=(+d.target||+m.target)).length;
+ const daysShown=m.summaryDaysOverride??m.records.length, passedShown=m.summaryPassedOverride??passed;
+ return `<section class="panel metric-card" draggable="true" data-metric-card="${m.id}" style="margin:0 0 14px;padding:14px">
+ <div class="metrichead" style="justify-content:space-between"><div><strong>${esc(m.name)}</strong> <span class="note">(${esc(m.unit)})</span><span class="order-hint">↕ ลากเพื่อจัดลำดับ</span></div><button class="pill" data-editsummary="${m.id}" title="คลิกเพื่อแก้จำนวนวัน/วันที่ผ่าน Target">${daysShown} วัน | ผ่าน Target ${passedShown} วัน ✎</button></div>
+ <div class="chartwrap"><svg viewBox="0 0 ${Math.max(1000, m.records.length*72+86)} 350" role="img" aria-label="${esc(m.name)}">${drawMetric(m,i)}</svg></div>
+ <div class="chart-note-wrap"><div class="chart-note-box"><label for="chartnote-${m.id}">Text note</label><textarea id="chartnote-${m.id}" data-chartnote="${m.id}" placeholder="พิมพ์หมายเหตุใต้กราฟนี้...">${esc(m.chartNote||"")}</textarea></div></div>
+ <div class="toolbar"><button data-select="${m.id}">กรอก/แก้ไขข้อมูล KPI นี้</button><button data-editmetric="${m.id}">แก้ชื่อ/Target/หน่วย</button><button class="danger" data-removemetric="${m.id}">ลบกราฟนี้</button></div>
+ </section>`}).join('');
+}
+function renderRows(){
+ let m=metric();$('recordsBody').innerHTML=[...m.records].sort((a,b)=>b.date.localeCompare(a.date)).map(d=>`<tr>
+ <td><input type="date" value="${esc(d.date)}" data-id="${d.id}" data-field="date"></td>
+ <td><input type="number" step="any" value="${esc(d.act)}" data-id="${d.id}" data-field="act"></td>
+ <td><input type="number" step="any" value="${esc(d.target??'')}" placeholder="${m.target}" data-id="${d.id}" data-field="target"></td>
+ <td><input type="color" value="${esc(d.color||((+d.act >= (+d.target||+m.target))?m.color:'#e53935'))}" title="เลือกสีแท่งของวันนี้" data-id="${d.id}" data-field="color"></td>
+ <td><input value="${esc(d.note)}" data-id="${d.id}" data-field="note"></td>
+ <td><button class="danger" data-delete="${d.id}">ลบ</button></td></tr>`).join('');
+}
+$('metricSelect').onchange=e=>{state.selected=e.target.value;render()};
+$('saveMetric').onclick=()=>{let m=metric();state.title=$('titleInput').value;m.target=+$('targetInput').value||0;m.unit=$('unitInput').value;m.color=$('barColor').value;save()};
+$('addMetric').onclick=()=>{let name=prompt('ชื่อ KPI ใหม่:','KPI ใหม่');if(!name)return;let m={id:uid(),name,unit:'หน่วย',target:0,color:'#12a45a',records:[]};state.metrics.push(m);state.selected=m.id;save()};
+$('deleteMetric').onclick=()=>{if(state.metrics.length<2){alert('ต้องมี KPI อย่างน้อย 1 รายการ');return}if(confirm('ลบ KPI และข้อมูลทั้งหมดของ KPI นี้?')){state.metrics=state.metrics.filter(m=>m.id!==state.selected);state.selected=state.metrics[0].id;save()}};
+$('dateInput').value=new Date().toISOString().slice(0,10);
+$('addRecord').onclick=()=>{let m=metric(),date=$('dateInput').value,act=$('actInput').value;if(!date||act===''){alert('กรุณากรอกวันที่และ Act');return}let old=m.records.find(d=>d.date===date),rec={id:old?.id||uid(),date,act:+act,target:$('dayTargetInput').value===''?null:+$('dayTargetInput').value,note:$('noteInput').value};if(old)Object.assign(old,rec);else m.records.push(rec);$('actInput').value='';$('dayTargetInput').value='';$('noteInput').value='';save()};
+// ลากย้ายตัวเลข Act และ Target Dynamic ได้โดยตรงบนกราฟ
+let labelDrag=null;
+function svgPoint(svg,evt){let p=svg.createSVGPoint();p.x=evt.clientX;p.y=evt.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
+$('dashboard').addEventListener('dblclick',e=>{
+ const label=e.target.closest('.target-kpi-label, .primary-target-label');if(!label)return;
+ const m=state.metrics.find(x=>x.id===label.dataset.metricId);if(!m)return;
+ const isPrimary=label.classList.contains('primary-target-label');
+ const field=isPrimary?'targetLabelText':'targetKpiLabelText';
+ const defaultText=isPrimary?'Target':'Target KPI';
+ const next=prompt('แก้ไขข้อความป้ายบนเส้นกราฟ:',m[field]??defaultText);
+ if(next===null)return;m[field]=next;save();
+});
+$('dashboard').addEventListener('pointerdown',e=>{
+ const label=e.target.closest('.draggable-label'); if(!label)return;
+ const svg=label.ownerSVGElement,pt=svgPoint(svg,e);
+ labelDrag={label,svg,type:label.dataset.labelType,id:label.dataset.recordId,startX:pt.x,startY:pt.y,origX:+label.getAttribute('x'),origY:+label.getAttribute('y'),pointerId:e.pointerId};
+ try{label.setPointerCapture(e.pointerId)}catch(_){} e.preventDefault();
+});
+$('dashboard').addEventListener('pointermove',e=>{if(!labelDrag||labelDrag.pointerId!==e.pointerId)return;const pt=svgPoint(labelDrag.svg,e);labelDrag.label.setAttribute('x',labelDrag.origX+pt.x-labelDrag.startX);labelDrag.label.setAttribute('y',labelDrag.origY+pt.y-labelDrag.startY)});
+function finishLabelDrag(e){if(!labelDrag||labelDrag.pointerId!==e.pointerId)return;const pt=svgPoint(labelDrag.svg,e),dx=pt.x-labelDrag.startX,dy=pt.y-labelDrag.startY;
+ if(labelDrag.type==='targetKpi' || labelDrag.type==='primaryTarget'){const m=state.metrics.find(x=>x.id===labelDrag.label.dataset.metricId);if(m){const prefix=labelDrag.type==='primaryTarget'?'targetLabel':'targetKpiLabel';m[prefix+'Dx']=(+(m[prefix+'Dx'])||0)+dx;m[prefix+'Dy']=(+(m[prefix+'Dy'])||0)+dy;}}
+ else {const d=state.metrics.flatMap(m=>m.records).find(x=>x.id===labelDrag.id);if(d){const xField=labelDrag.type==='act'?'actLabelDx':'targetLabelDx',yField=labelDrag.type==='act'?'actLabelDy':'targetLabelDy';d[xField]=(+(d[xField])||0)+dx;d[yField]=(+(d[yField])||0)+dy;}}
+ labelDrag=null;save()}
+$('dashboard').addEventListener('pointerup',finishLabelDrag);
+$('dashboard').addEventListener('pointercancel',finishLabelDrag);
+$('dashboard').onclick=e=>{
+ let sel=e.target.dataset.select,edit=e.target.dataset.editmetric,del=e.target.dataset.removemetric,summary=e.target.dataset.editsummary;
+ if(sel){state.selected=sel;render();$('metricSelect').value=sel;window.scrollTo({top:0,behavior:'smooth'});}
+ if(summary){let m=state.metrics.find(x=>x.id===summary);if(!m)return;let days=prompt('จำนวนวันทั้งหมดที่ต้องการแสดง:',m.summaryDaysOverride??m.records.length);if(days===null)return;let passed=prompt('จำนวนวันที่ผ่าน Target ที่ต้องการแสดง:',m.summaryPassedOverride??m.records.filter(d=>+d.act>=(d.target==null?(+m.target||0):+d.target)).length);if(passed===null)return;m.summaryDaysOverride=days.trim()===''?null:Math.max(0,Math.floor(+days||0));m.summaryPassedOverride=passed.trim()===''?null:Math.max(0,Math.floor(+passed||0));save();}
+ if(edit){let m=state.metrics.find(x=>x.id===edit);let name=prompt('ชื่อกราฟ:',m.name);if(name===null)return;let target=prompt('Target:',m.target);if(target===null)return;let unit=prompt('หน่วย:',m.unit);if(unit===null)return;m.name=name;m.target=+target||0;m.unit=unit;save();}
+ if(del){if(state.metrics.length<2){alert('ต้องมี KPI อย่างน้อย 1 รายการ');return}if(confirm('ลบกราฟและข้อมูล KPI นี้ทั้งหมด?')){state.metrics=state.metrics.filter(m=>m.id!==del);if(state.selected===del)state.selected=state.metrics[0].id;save();}}
+};
+// Drag-and-drop reorder of KPI cards; order is saved in the shared state.
+let draggedMetricId=null;
+$('dashboard').addEventListener('dragstart',e=>{const card=e.target.closest('[data-metric-card]');if(!card)return;draggedMetricId=card.dataset.metricCard;card.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',draggedMetricId);});
+$('dashboard').addEventListener('dragend',e=>{const card=e.target.closest('[data-metric-card]');if(card)card.classList.remove('dragging');$('dashboard').querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));draggedMetricId=null;});
+$('dashboard').addEventListener('dragover',e=>{const card=e.target.closest('[data-metric-card]');if(!card||!draggedMetricId||card.dataset.metricCard===draggedMetricId)return;e.preventDefault();e.dataTransfer.dropEffect='move';$('dashboard').querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));card.classList.add('drag-over');});
+$('dashboard').addEventListener('drop',e=>{const card=e.target.closest('[data-metric-card]');if(!card||!draggedMetricId||card.dataset.metricCard===draggedMetricId)return;e.preventDefault();const from=state.metrics.findIndex(m=>m.id===draggedMetricId),to=state.metrics.findIndex(m=>m.id===card.dataset.metricCard);if(from<0||to<0)return;const [moving]=state.metrics.splice(from,1);state.metrics.splice(to,0,moving);save();});
+$('dashboard').addEventListener('change',e=>{const id=e.target.dataset.chartnote;if(!id)return;const m=state.metrics.find(x=>x.id===id);if(m){m.chartNote=e.target.value;save();}});
+$('recordsBody').onchange=e=>{let id=e.target.dataset.id,field=e.target.dataset.field;if(!id||!field)return;let d=metric().records.find(x=>x.id===id);if(d){d[field]=(field==='act'||field==='target')?(e.target.value===''?null:+e.target.value):e.target.value;save()}};
+$('recordsBody').onclick=e=>{let id=e.target.dataset.delete;if(id&&confirm('ลบรายการนี้?')){metric().records=metric().records.filter(d=>d.id!==id);save()}};
+$('clearRecords').onclick=()=>{if(confirm('ลบข้อมูลรายวันทั้งหมดของ KPI นี้?')){metric().records=[];save()}};
+function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
+$('exportExcelBtn').onclick=()=>{window.location.href='/api/export'};
+$('exportBtn').onclick=()=>{let rows=[['KPI','Unit','DefaultTarget','Date','Act','DayTarget','Note']];state.metrics.forEach(m=>m.records.forEach(d=>rows.push([m.name,m.unit,m.target,d.date,d.act,d.target,d.note])));let blob=new Blob(['\ufeff'+rows.map(r=>r.map(csvEscape).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OH_Daily_KPI.csv';a.click();URL.revokeObjectURL(a.href)};
+$('importBtn').onclick=()=>$('fileInput').click();
+$('fileInput').onchange=async e=>{let text=await e.target.files[0]?.text();if(!text)return;let lines=text.replace(/^\ufeff/,'').split(/\r?\n/).filter(Boolean);let parse=line=>{let out=[],s='',q=false;for(let i=0;i<line.length;i++){let c=line[i];if(c==='"'&&q&&line[i+1]==='"'){s+='"';i++}else if(c==='"')q=!q;else if(c===','&&!q){out.push(s);s=''}else s+=c}out.push(s);return out};let rows=lines.slice(1).map(parse);rows.forEach(r=>{let [name,unit,target,date,act,dayTarget,note]=r;if(!date||act==='')return;let m=state.metrics.find(x=>x.name===name);if(!m){m={id:uid(),name,unit:unit||'หน่วย',target:+target||0,color:'#12a45a',records:[]};state.metrics.push(m)}let rec=m.records.find(x=>x.date===date);let val={id:rec?.id||uid(),date,act:+act,target:dayTarget===''?null:+dayTarget,note};if(rec)Object.assign(rec,val);else m.records.push(val)});state.selected=state.metrics[0].id;save();e.target.value=''};
+render();
+initSQLite();
+</script></body></html>
