@@ -288,11 +288,12 @@ async function copyMetricChart(metricId,button){
   const vb=svg.viewBox.baseVal,scale=Math.min(2,2400/vb.width);
   const graphW=Math.round(vb.width*scale),graphH=Math.round(vb.height*scale);
   const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
-  const note=(m.chartNote||'').trim(),pad=44,titleH=92,noteH=note?Math.max(76,Math.ceil(note.length/100)*28+36):24;
+  const note=(m.chartNote||'').trim(),summary=(card.querySelector('[data-editsummary]')?.textContent||'').replace(/\\s*✎\\s*$/,'').trim(),pad=44,titleH=104,noteH=note?Math.max(76,Math.ceil(note.length/100)*28+36):24;
   canvas.width=graphW+pad*2;canvas.height=titleH+graphH+noteH+pad;
   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle='#0f172a';ctx.font='bold 30px Arial, sans-serif';ctx.fillText(m.name, pad, 48);
-  ctx.fillStyle='#64748b';ctx.font='18px Arial, sans-serif';ctx.fillText('('+m.unit+')',pad,76);
+  ctx.fillStyle='#0f172a';ctx.font='bold 30px Arial, sans-serif';ctx.textAlign='left';ctx.fillText(m.name, pad, 48);
+  ctx.fillStyle='#64748b';ctx.font='18px Arial, sans-serif';ctx.fillText('('+m.unit+')',pad,78);
+  if(summary){ctx.fillStyle='#126da8';ctx.font='bold 18px Arial, sans-serif';ctx.textAlign='right';ctx.fillText(summary,canvas.width-pad,48);ctx.textAlign='left';}
   const svgBlob=new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml;charset=utf-8'});
   const svgUrl=URL.createObjectURL(svgBlob);
   try{
