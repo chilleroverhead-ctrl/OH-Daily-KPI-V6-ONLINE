@@ -100,7 +100,7 @@ function drawMetric(m,idx){
  let slot=plotW/Math.max(data.length,1),bw=Math.min(35,slot*.58);
  const targetAt=d=>d.target==null?baseTarget:(+d.target);
  const targetPoints=data.map((d,i)=>{const center=L+i*slot+slot/2;return `${center},${y(targetAt(d))}`}).join(' ');
- const hasDailyOverride=data.some(d=>d.target!=null && +d.target!==(+m.target||0));
+ const hasDailyOverride=data.some(d=>d.target!=null && +d.target!==baseTarget);
  if(isOhCost){
    // OH cost keeps two distinct references: fixed KPI target and daily dynamic target.
    let ty=y(baseTarget);
@@ -310,7 +310,7 @@ $('dashboard').onclick=e=>{
 
  save();
 }
- if(edit){let m=state.metrics.find(x=>x.id===edit);let name=prompt('ชื่อกราฟ:',m.name);if(name===null)return;let target=prompt('Target:',m.target);if(target===null)return;let unit=prompt('หน่วย:',m.unit);if(unit===null)return;m.name=name;setMonthTarget(m,target);m.unit=unit;save();}
+ if(edit){let m=state.metrics.find(x=>x.id===edit);let name=prompt('ชื่อกราฟ:',m.name);if(name===null)return;let target=prompt('Target:',getMonthTarget(m));if(target===null)return;let unit=prompt('หน่วย:',m.unit);if(unit===null)return;m.name=name;setMonthTarget(m,target);m.unit=unit;save();}
  if(del){if(state.metrics.length<2){alert('ต้องมี KPI อย่างน้อย 1 รายการ');return}if(confirm('ลบกราฟและข้อมูล KPI นี้ทั้งหมด?')){state.metrics=state.metrics.filter(m=>m.id!==del);if(state.selected===del)state.selected=state.metrics[0].id;save();}}
 };
 // Drag-and-drop reorder of KPI cards; order is saved in the shared state.
