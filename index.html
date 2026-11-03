@@ -93,12 +93,9 @@ function render(){
 function drawMetric(m,idx){
  let data=[...m.records].sort((a,b)=>a.date.localeCompare(b.date));
  let L=62,R=24,T=38,B=72,H=350; let W=Math.max(1000,data.length*72+L+R),plotH=H-T-B,plotW=W-L-R;
- const baseTarget=getMonthTarget(m);
- const vals=data.flatMap(d=>[+d.act, d.target==null?baseTarget:+d.target]).concat([baseTarget,0]);
- const rawMin=Math.min(0,...vals),rawMax=Math.max(0,...vals);
- const span=Math.max(1,rawMax-rawMin),minVal=rawMin<0?rawMin-span*.10:0,maxVal=rawMax>0?rawMax+span*.10:0;
- let y=v=>T+((maxVal-v)/(maxVal-minVal))*plotH,parts=[];
- for(let i=0;i<=5;i++){let v=maxVal-(maxVal-minVal)*i/5,yy=y(v);parts.push(`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="${Math.abs(v)<.000001?'#64748b':'#d9e0e6'}" stroke-width="${Math.abs(v)<.000001?1.8:1}"/><text x="${L-9}" y="${yy+4}" text-anchor="end" font-size="12" fill="#64748b">${v.toFixed(1)}</text>`)}
+ const baseTarget=getMonthTarget(m); let vals=data.flatMap(d=>[+d.act, d.target==null?baseTarget:+d.target]).concat([baseTarget]),max=Math.max(1,...vals)*1.18;
+ let y=v=>T+plotH-(v/max)*plotH,parts=[];
+ for(let i=0;i<=5;i++){let v=max*i/5,yy=y(v);parts.push(`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#d9e0e6"/><text x="${L-9}" y="${yy+4}" text-anchor="end" font-size="12" fill="#64748b">${v.toFixed(1)}</text>`)}
  const isOhCost = m.name.trim().toLowerCase().includes('ต้นทุนฝ่าย oh บาท/kgfg'.toLowerCase());
  let slot=plotW/Math.max(data.length,1),bw=Math.min(35,slot*.58);
  const targetAt=d=>d.target==null?baseTarget:(+d.target);
@@ -127,13 +124,13 @@ function drawMetric(m,idx){
    const primaryLabelText=m.targetLabelText==null?'Target':m.targetLabelText;
    parts.push(`<text class="draggable-label primary-target-label" data-label-type="primaryTarget" data-metric-id="${esc(m.id)}" x="${primaryLabelX}" y="${primaryLabelY}" text-anchor="end" font-size="12" fill="#1676b8" title="ลากเพื่อย้าย • ดับเบิลคลิกเพื่อแก้ข้อความ">${esc(primaryLabelText)} ${esc(latestTarget)} ${esc(m.unit)}</text>`);
  }
- data.forEach((d,i)=>{let xx=L+i*slot+(slot-bw)/2,center=xx+bw/2,act=+d.act,zeroY=y(0),actY=y(act),barY=Math.min(zeroY,actY),hh=Math.abs(zeroY-actY),targetVal=d.target==null?baseTarget:(+d.target),targetY=y(targetVal),col=d.color||((act >= targetVal)?m.color:'#e53935');
- parts.push(`<rect x="${xx}" y="${barY}" width="${bw}" height="${hh}" fill="${col}" rx="1"/>`);
- // Act label sits beyond the end of the bar: above for positive, below for negative.
- let labelY=(act<0?Math.min(H-B-4,actY+16):Math.max(13,actY-7-(i%2)*15))+(+(d.actLabelDy)||0), actDx=+(d.actLabelDx)||0;
+ data.forEach((d,i)=>{let xx=L+i*slot+(slot-bw)/2,center=xx+bw/2,yy=y(+d.act),hh=T+plotH-yy,targetVal=d.target==null?baseTarget:(+d.target),targetY=y(targetVal),col=d.color||((+d.act >= targetVal)?m.color:'#e53935');
+ parts.push(`<rect x="${xx}" y="${yy}" width="${bw}" height="${Math.max(0,hh)}" fill="${col}" rx="1"/>`);
+ // Act label above its bar, staggered to reduce collisions
+ let labelY=Math.max(13,yy-7-(i%2)*15)+(+(d.actLabelDy)||0), actDx=+(d.actLabelDx)||0;
  parts.push(`<text class="draggable-label" data-label-type="act" data-record-id="${d.id}" x="${center+actDx}" y="${labelY}" text-anchor="middle" font-size="12" font-weight="600" fill="#334155" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" title="ลากเพื่อย้ายตำแหน่งตัวเลข Act">${esc(d.act)}</text>`);
  // Daily Target label: faint but readable, placed on the opposite side of the target level from Act when close
- let actClose=Math.abs(actY-targetY)<30, targetLabelY;
+ let actClose=Math.abs(yy-targetY)<30, targetLabelY;
  if(actClose) targetLabelY = yy<=targetY ? Math.min(T+plotH-4,targetY+17) : Math.max(T+12,targetY-12);
  else targetLabelY = targetY + (i%2===0 ? 14 : -10);
  targetLabelY=Math.max(T+11,Math.min(T+plotH-3,targetLabelY))+(+(d.targetLabelDy)||0); let targetDx=+(d.targetLabelDx)||0;
