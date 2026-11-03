@@ -183,6 +183,7 @@ const passedShown=monthSummary.passed??passed;
    </div>
 
    <div class="toolbar">
+    <button data-copy-chart="${m.id}" class="primary">คัดลอกรูปกราฟ</button>
     <button data-select="${m.id}">กรอก/แก้ไขข้อมูล KPI นี้</button>
     <button data-editmetric="${m.id}">แก้ชื่อ/Target/หน่วย</button>
     <button class="danger" data-removemetric="${m.id}">ลบกราฟนี้</button>
@@ -275,7 +276,51 @@ function finishLabelDrag(e){if(!labelDrag||labelDrag.pointerId!==e.pointerId)ret
  labelDrag=null;save()}
 $('dashboard').addEventListener('pointerup',finishLabelDrag);
 $('dashboard').addEventListener('pointercancel',finishLabelDrag);
+async function copyMetricChart(metricId,button){
+ const card=document.querySelector(`[data-metric-card="${CSS.escape(metricId)}"]`);
+ const m=state.metrics.find(x=>x.id===metricId);
+ const svg=card?.querySelector('svg');
+ if(!card||!m||!svg){alert('ไม่พบกราฟที่ต้องการคัดลอก');return;}
+ const oldText=button.textContent;button.disabled=true;button.textContent='กำลังสร้างรูป...';
+ try{
+  const clone=svg.cloneNode(true);
+  clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  const vb=svg.viewBox.baseVal,scale=Math.min(2,2400/vb.width);
+  const graphW=Math.round(vb.width*scale),graphH=Math.round(vb.height*scale);
+  const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
+  const note=(m.chartNote||'').trim(),summary=(card.querySelector('[data-editsummary]')?.textContent||'').replace(/\\s*✎\\s*$/,'').trim(),pad=44,titleH=104,noteH=note?Math.max(76,Math.ceil(note.length/100)*28+36):24;
+  canvas.width=graphW+pad*2;canvas.height=titleH+graphH+noteH+pad;
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#0f172a';ctx.font='bold 30px Arial, sans-serif';ctx.textAlign='left';ctx.fillText(m.name, pad, 48);
+  ctx.fillStyle='#64748b';ctx.font='18px Arial, sans-serif';ctx.fillText('('+m.unit+')',pad,78);
+  if(summary){ctx.fillStyle='#126da8';ctx.font='bold 18px Arial, sans-serif';ctx.textAlign='right';ctx.fillText(summary,canvas.width-pad,48);ctx.textAlign='left';}
+  const svgBlob=new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml;charset=utf-8'});
+  const svgUrl=URL.createObjectURL(svgBlob);
+  try{
+   const img=new Image();
+   await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=svgUrl;});
+   ctx.drawImage(img,pad,titleH,graphW,graphH);
+  }finally{URL.revokeObjectURL(svgUrl);}
+  if(note){
+   let y=titleH+graphH+38;ctx.fillStyle='#334155';ctx.font='bold 18px Arial, sans-serif';ctx.fillText('Text note',pad,y);
+   ctx.font='17px Arial, sans-serif';ctx.fillStyle='#475569';
+   const words=note.split(/\s+/);let line='',lineY=y+30,maxW=canvas.width-pad*2;
+   for(const word of words){const test=line?line+' '+word:word;if(ctx.measureText(test).width>maxW&&line){ctx.fillText(line,pad,lineY);line=word;lineY+=25;}else line=test;}
+   if(line)ctx.fillText(line,pad,lineY);
+  }
+  const png=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('สร้าง PNG ไม่สำเร็จ')),'image/png'));
+  if(navigator.clipboard?.write&&window.ClipboardItem){
+   try{await navigator.clipboard.write([new ClipboardItem({'image/png':png})]);button.textContent='คัดลอกรูปแล้ว';}
+   catch(_){const a=document.createElement('a');a.href=URL.createObjectURL(png);a.download='OH-KPI-'+metricId+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);button.textContent='ดาวน์โหลดรูปแล้ว';}
+  }else{
+   const url=URL.createObjectURL(png),a=document.createElement('a');a.href=url;a.download='OH-KPI-'+metricId+'.png';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);button.textContent='ดาวน์โหลดรูปแล้ว';
+  }
+ }catch(err){alert('ไม่สามารถสร้างรูปกราฟได้: '+err.message);button.textContent=oldText;}
+ finally{button.disabled=false;setTimeout(()=>{if(button.isConnected)button.textContent=oldText;},2500);}
+}
 $('dashboard').onclick=e=>{
+ const copyBtn=e.target.closest('[data-copy-chart]');
+ if(copyBtn){copyMetricChart(copyBtn.dataset.copyChart,copyBtn);return;}
  let sel=e.target.dataset.select,edit=e.target.dataset.editmetric,del=e.target.dataset.removemetric,summary=e.target.dataset.editsummary;
  if(sel){state.selected=sel;render();$('metricSelect').value=sel;window.scrollTo({top:0,behavior:'smooth'});}
  if(summary){
