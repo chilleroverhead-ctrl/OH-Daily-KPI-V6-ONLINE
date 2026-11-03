@@ -133,7 +133,7 @@ function drawMetric(m,idx){
  let labelY=(act<0?Math.min(H-B-4,actY+16):Math.max(13,actY-7-(i%2)*15))+(+(d.actLabelDy)||0), actDx=+(d.actLabelDx)||0;
  parts.push(`<text class="draggable-label" data-label-type="act" data-record-id="${d.id}" x="${center+actDx}" y="${labelY}" text-anchor="middle" font-size="12" font-weight="600" fill="#334155" paint-order="stroke" stroke="#ffffff" stroke-width="3" stroke-linejoin="round" title="ลากเพื่อย้ายตำแหน่งตัวเลข Act">${esc(d.act)}</text>`);
  // Daily Target label: faint but readable, placed on the opposite side of the target level from Act when close
- let actClose=Math.abs(yy-targetY)<30, targetLabelY;
+ let actClose=Math.abs(actY-targetY)<30, targetLabelY;
  if(actClose) targetLabelY = yy<=targetY ? Math.min(T+plotH-4,targetY+17) : Math.max(T+12,targetY-12);
  else targetLabelY = targetY + (i%2===0 ? 14 : -10);
  targetLabelY=Math.max(T+11,Math.min(T+plotH-3,targetLabelY))+(+(d.targetLabelDy)||0); let targetDx=+(d.targetLabelDx)||0;
