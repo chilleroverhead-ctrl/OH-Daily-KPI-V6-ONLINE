@@ -72,6 +72,8 @@ let selectedMonth=currentMonth();
 let remoteReady=false;
 let syncTimer=null;
 
+function getMonthTarget(m, month=selectedMonth){ return Number(m.targetByMonth?.[month] ?? m.target ?? 0); }
+function setMonthTarget(m, value, month=selectedMonth){ if(!m.targetByMonth)m.targetByMonth={}; m.targetByMonth[month]=Number(value)||0; }
 function recordsOfMonth(m){
  return (m.records||[]).filter(d=>
   String(d.date||'').slice(0,7)===selectedMonth
@@ -85,26 +87,26 @@ function render(){
  $('appTitle').textContent=state.title;$('titleInput').value=state.title;
  $('metricSelect').innerHTML=state.metrics.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('');
  $('metricSelect').value=state.selected;let m=metric();if(!m)return;
- $('targetInput').value=m.target;$('unitInput').value=m.unit;$('barColor').value=m.color;
+ $('targetInput').value=getMonthTarget(m);$('unitInput').value=m.unit;$('barColor').value=m.color;
  renderDashboard();renderRows();
 }
 function drawMetric(m,idx){
  let data=[...m.records].sort((a,b)=>a.date.localeCompare(b.date));
  let L=62,R=24,T=38,B=72,H=350; let W=Math.max(1000,data.length*72+L+R),plotH=H-T-B,plotW=W-L-R;
- let vals=data.flatMap(d=>[+d.act, d.target==null?+m.target||0:+d.target]).concat([+m.target||0]),max=Math.max(1,...vals)*1.18;
+ const baseTarget=getMonthTarget(m); let vals=data.flatMap(d=>[+d.act, d.target==null?baseTarget:+d.target]).concat([baseTarget]),max=Math.max(1,...vals)*1.18;
  let y=v=>T+plotH-(v/max)*plotH,parts=[];
  for(let i=0;i<=5;i++){let v=max*i/5,yy=y(v);parts.push(`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#d9e0e6"/><text x="${L-9}" y="${yy+4}" text-anchor="end" font-size="12" fill="#64748b">${v.toFixed(1)}</text>`)}
  const isOhCost = m.name.trim().toLowerCase().includes('ต้นทุนฝ่าย oh บาท/kgfg'.toLowerCase());
  let slot=plotW/Math.max(data.length,1),bw=Math.min(35,slot*.58);
- const targetAt=d=>d.target==null?(+m.target||0):(+d.target);
+ const targetAt=d=>d.target==null?baseTarget:(+d.target);
  const targetPoints=data.map((d,i)=>{const center=L+i*slot+slot/2;return `${center},${y(targetAt(d))}`}).join(' ');
  const hasDailyOverride=data.some(d=>d.target!=null && +d.target!==(+m.target||0));
  if(isOhCost){
    // OH cost keeps two distinct references: fixed KPI target and daily dynamic target.
-   let ty=y(+m.target||0);
+   let ty=y(baseTarget);
    const targetLabelX=(W-R-4)+(+(m.targetKpiLabelDx||0)),targetLabelY=Math.max(13,ty-7)+(+(m.targetKpiLabelDy||0));
    const targetLabelPrefix=m.targetKpiLabelText==null?'Target KPI':m.targetKpiLabelText;
-   parts.push(`<line x1="${L}" y1="${ty}" x2="${W-R}" y2="${ty}" stroke="#1676b8" stroke-width="2.5" opacity=".85"/><text class="draggable-label target-kpi-label" data-label-type="targetKpi" data-metric-id="${esc(m.id)}" x="${targetLabelX}" y="${targetLabelY}" text-anchor="end" font-size="12" fill="#1676b8" title="ลากเพื่อย้าย • ดับเบิลคลิกเพื่อแก้ข้อความ">${esc(targetLabelPrefix)} ${esc(m.target)} ${esc(m.unit)}</text>`);
+   parts.push(`<line x1="${L}" y1="${ty}" x2="${W-R}" y2="${ty}" stroke="#1676b8" stroke-width="2.5" opacity=".85"/><text class="draggable-label target-kpi-label" data-label-type="targetKpi" data-metric-id="${esc(m.id)}" x="${targetLabelX}" y="${targetLabelY}" text-anchor="end" font-size="12" fill="#1676b8" title="ลากเพื่อย้าย • ดับเบิลคลิกเพื่อแก้ข้อความ">${esc(targetLabelPrefix)} ${esc(baseTarget)} ${esc(m.unit)}</text>`);
    if(data.length && hasDailyOverride){
      parts.push(`<polyline points="${targetPoints}" fill="none" stroke="#7dd3fc" stroke-width="2.5" stroke-dasharray="7 5" stroke-linecap="round" stroke-linejoin="round" opacity=".95"/>`);
      parts.push(`<line x1="${W-R-150}" y1="${T+10}" x2="${W-R-112}" y2="${T+10}" stroke="#7dd3fc" stroke-width="2.5" stroke-dasharray="7 5"/><text x="${W-R-106}" y="${T+14}" font-size="11" fill="#64748b">Target Dynamic</text>`);
@@ -114,15 +116,15 @@ function drawMetric(m,idx){
    if(data.length>1){
      parts.push(`<polyline points="${targetPoints}" fill="none" stroke="#1676b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`);
    } else {
-     const ty=y(data.length?targetAt(data[0]):(+m.target||0));
+     const ty=y(data.length?targetAt(data[0]):baseTarget);
      parts.push(`<line x1="${L}" y1="${ty}" x2="${W-R}" y2="${ty}" stroke="#1676b8" stroke-width="2.5" opacity=".85"/>`);
    }
-   const latestTarget=data.length?targetAt(data[data.length-1]):(+m.target||0);
+   const latestTarget=data.length?targetAt(data[data.length-1]):baseTarget;
    const primaryLabelX=(W-R-4)+(+(m.targetLabelDx||0)), primaryLabelY=Math.max(13,y(latestTarget)-7)+(+(m.targetLabelDy||0));
    const primaryLabelText=m.targetLabelText==null?'Target':m.targetLabelText;
    parts.push(`<text class="draggable-label primary-target-label" data-label-type="primaryTarget" data-metric-id="${esc(m.id)}" x="${primaryLabelX}" y="${primaryLabelY}" text-anchor="end" font-size="12" fill="#1676b8" title="ลากเพื่อย้าย • ดับเบิลคลิกเพื่อแก้ข้อความ">${esc(primaryLabelText)} ${esc(latestTarget)} ${esc(m.unit)}</text>`);
  }
- data.forEach((d,i)=>{let xx=L+i*slot+(slot-bw)/2,center=xx+bw/2,yy=y(+d.act),hh=T+plotH-yy,targetVal=d.target==null?(+m.target||0):(+d.target),targetY=y(targetVal),col=d.color||((+d.act >= targetVal)?m.color:'#e53935');
+ data.forEach((d,i)=>{let xx=L+i*slot+(slot-bw)/2,center=xx+bw/2,yy=y(+d.act),hh=T+plotH-yy,targetVal=d.target==null?baseTarget:(+d.target),targetY=y(targetVal),col=d.color||((+d.act >= targetVal)?m.color:'#e53935');
  parts.push(`<rect x="${xx}" y="${yy}" width="${bw}" height="${Math.max(0,hh)}" fill="${col}" rx="1"/>`);
  // Act label above its bar, staggered to reduce collisions
  let labelY=Math.max(13,yy-7-(i%2)*15)+(+(d.actLabelDy)||0), actDx=+(d.actLabelDx)||0;
@@ -144,7 +146,7 @@ function renderDashboard(){
   const viewMetric={...m,records:recordsOfMonth(m)};
 
   let passed=viewMetric.records.filter(d=>
-   +d.act >= (d.target==null?(+m.target||0):+d.target)
+   +d.act >= (d.target==null?getMonthTarget(m):+d.target)
   ).length;
 
 const monthSummary=m.summaryByMonth?.[selectedMonth]||{};
@@ -192,8 +194,8 @@ function renderRows(){
  let m=metric();$('recordsBody').innerHTML=[...recordsOfMonth(m)].sort((a,b)=>b.date.localeCompare(a.date)).map(d=>`<tr>
  <td><input type="date" value="${esc(d.date)}" data-id="${d.id}" data-field="date"></td>
  <td><input type="number" step="any" value="${esc(d.act)}" data-id="${d.id}" data-field="act"></td>
- <td><input type="number" step="any" value="${esc(d.target??'')}" placeholder="${m.target}" data-id="${d.id}" data-field="target"></td>
- <td><input type="color" value="${esc(d.color||((+d.act >= (+d.target||+m.target))?m.color:'#e53935'))}" title="เลือกสีแท่งของวันนี้" data-id="${d.id}" data-field="color"></td>
+ <td><input type="number" step="any" value="${esc(d.target??'')}" placeholder="${getMonthTarget(m)}" data-id="${d.id}" data-field="target"></td>
+ <td><input type="color" value="${esc(d.color||((+d.act >= (d.target==null?getMonthTarget(m):+d.target))?m.color:'#e53935'))}" title="เลือกสีแท่งของวันนี้" data-id="${d.id}" data-field="color"></td>
  <td><input value="${esc(d.note)}" data-id="${d.id}" data-field="note"></td>
  <td><button class="danger" data-delete="${d.id}">ลบ</button></td></tr>`).join('');
 }
@@ -205,7 +207,7 @@ $('monthFilter').onchange=e=>{
  state.selected=e.target.value;
  render();
 };
-$('saveMetric').onclick=()=>{let m=metric();state.title=$('titleInput').value;m.target=+$('targetInput').value||0;m.unit=$('unitInput').value;m.color=$('barColor').value;save()};
+$('saveMetric').onclick=()=>{let m=metric();state.title=$('titleInput').value;setMonthTarget(m,$('targetInput').value);m.unit=$('unitInput').value;m.color=$('barColor').value;save()};
 $('addMetric').onclick=()=>{let name=prompt('ชื่อ KPI ใหม่:','KPI ใหม่');if(!name)return;let m={id:uid(),name,unit:'หน่วย',target:0,color:'#12a45a',records:[]};state.metrics.push(m);state.selected=m.id;save()};
 $('deleteMetric').onclick=()=>{if(state.metrics.length<2){alert('ต้องมี KPI อย่างน้อย 1 รายการ');return}if(confirm('ลบ KPI และข้อมูลทั้งหมดของ KPI นี้?')){state.metrics=state.metrics.filter(m=>m.id!==state.selected);state.selected=state.metrics[0].id;save()}};
 function todayLocal(){
@@ -286,7 +288,7 @@ $('dashboard').onclick=e=>{
  const monthData=m.summaryByMonth[selectedMonth]||{};
 
  let defaultPassed=monthRecords.filter(d=>
-  +d.act >= (d.target==null?(+m.target||0):+d.target)
+  +d.act >= (d.target==null?getMonthTarget(m):+d.target)
  ).length;
 
  let days=prompt(
@@ -308,7 +310,7 @@ $('dashboard').onclick=e=>{
 
  save();
 }
- if(edit){let m=state.metrics.find(x=>x.id===edit);let name=prompt('ชื่อกราฟ:',m.name);if(name===null)return;let target=prompt('Target:',m.target);if(target===null)return;let unit=prompt('หน่วย:',m.unit);if(unit===null)return;m.name=name;m.target=+target||0;m.unit=unit;save();}
+ if(edit){let m=state.metrics.find(x=>x.id===edit);let name=prompt('ชื่อกราฟ:',m.name);if(name===null)return;let target=prompt('Target:',m.target);if(target===null)return;let unit=prompt('หน่วย:',m.unit);if(unit===null)return;m.name=name;setMonthTarget(m,target);m.unit=unit;save();}
  if(del){if(state.metrics.length<2){alert('ต้องมี KPI อย่างน้อย 1 รายการ');return}if(confirm('ลบกราฟและข้อมูล KPI นี้ทั้งหมด?')){state.metrics=state.metrics.filter(m=>m.id!==del);if(state.selected===del)state.selected=state.metrics[0].id;save();}}
 };
 // Drag-and-drop reorder of KPI cards; order is saved in the shared state.
@@ -396,7 +398,7 @@ $('exportExcelBtn').onclick=async()=>{
     btn.textContent=oldText;
   }
 };
-$('exportBtn').onclick=()=>{let rows=[['KPI','Unit','DefaultTarget','Date','Act','DayTarget','Note']];state.metrics.forEach(m=>m.records.forEach(d=>rows.push([m.name,m.unit,m.target,d.date,d.act,d.target,d.note])));let blob=new Blob(['\ufeff'+rows.map(r=>r.map(csvEscape).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OH_Daily_KPI.csv';a.click();URL.revokeObjectURL(a.href)};
+$('exportBtn').onclick=()=>{let rows=[['KPI','Unit','DefaultTarget','Date','Act','DayTarget','Note']];state.metrics.forEach(m=>m.records.forEach(d=>rows.push([m.name,m.unit,getMonthTarget(m,d.date.slice(0,7)),d.date,d.act,d.target,d.note])));let blob=new Blob(['\ufeff'+rows.map(r=>r.map(csvEscape).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='OH_Daily_KPI.csv';a.click();URL.revokeObjectURL(a.href)};
 $('importBtn').onclick=()=>$('fileInput').click();
 $('fileInput').onchange=async e=>{let text=await e.target.files[0]?.text();if(!text)return;let lines=text.replace(/^\ufeff/,'').split(/\r?\n/).filter(Boolean);let parse=line=>{let out=[],s='',q=false;for(let i=0;i<line.length;i++){let c=line[i];if(c==='"'&&q&&line[i+1]==='"'){s+='"';i++}else if(c==='"')q=!q;else if(c===','&&!q){out.push(s);s=''}else s+=c}out.push(s);return out};let rows=lines.slice(1).map(parse);rows.forEach(r=>{let [name,unit,target,date,act,dayTarget,note]=r;if(!date||act==='')return;let m=state.metrics.find(x=>x.name===name);if(!m){m={id:uid(),name,unit:unit||'หน่วย',target:+target||0,color:'#12a45a',records:[]};state.metrics.push(m)}let rec=m.records.find(x=>x.date===date);let val={id:rec?.id||uid(),date,act:+act,target:dayTarget===''?null:+dayTarget,note};if(rec)Object.assign(rec,val);else m.records.push(val)});state.selected=state.metrics[0].id;save();e.target.value=''};
 render();
