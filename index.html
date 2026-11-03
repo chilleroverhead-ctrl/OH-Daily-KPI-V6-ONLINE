@@ -42,9 +42,17 @@ table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1p
 <button class="primary" id="addRecord">เพิ่ม/ปรับปรุงข้อมูล</button>
 </div><p class="note">วันที่ซ้ำใน KPI เดียวกันจะปรับปรุงรายการเดิมให้ ไม่สร้างรายการซ้ำ</p>
 </section>
-<section class="panel"><h3 style="margin:0 0 12px">Scoreboard รวมทุก KPI</h3><div id="dashboard"></div><div class="note">แต่ละหัวข้อมีกราฟของตัวเอง: แท่ง = Act รายวัน • เส้นสีน้ำเงิน = Target หลัก (ปรับตาม Target รายวันที่กรอก) • เฉพาะกราฟต้นทุน OH บาท/kgFG แสดง Target KPI และเส้นประ Target Dynamic แยกกัน • ลากตัวเลข Act/Target และป้าย Target KPI เพื่อย้ายตำแหน่ง • ดับเบิลคลิกป้าย Target KPI เพื่อแก้ข้อความ • คลิกจำนวนวัน/ผ่าน Target เพื่อแก้ไข • ลากกราฟเพื่อจัดลำดับ • สีแท่งเลือกแยกแต่ละวันได้จากตาราง</div></section>
 <section class="panel">
-<div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">รายการข้อมูล (แก้ไข/ลบได้)</h3><button id="clearRecords" class="danger">ลบข้อมูล KPI นี้ทั้งหมด</button></div>
+<div class="row" style="justify-content:space-between;align-items:end">
+<h3 style="margin:0 0 12px">Scoreboard รวมทุก KPI</h3>
+<div class="field" style="max-width:190px">
+<label>เลือกเดือนที่ต้องการดู</label>
+<input id="monthFilter" type="month">
+</div>
+</div>
+<div id="dashboard"></div><div class="note">แต่ละหัวข้อมีกราฟของตัวเอง: แท่ง = Act รายวัน • เส้นสีน้ำเงิน = Target หลัก (ปรับตาม Target รายวันที่กรอก) • เฉพาะกราฟต้นทุน OH บาท/kgFG แสดง Target KPI และเส้นประ Target Dynamic แยกกัน • ลากตัวเลข Act/Target และป้าย Target KPI เพื่อย้ายตำแหน่ง • ดับเบิลคลิกป้าย Target KPI เพื่อแก้ข้อความ • คลิกจำนวนวัน/ผ่าน Target เพื่อแก้ไข • ลากกราฟเพื่อจัดลำดับ • สีแท่งเลือกแยกแต่ละวันได้จากตาราง</div></section>
+<section class="panel">
+<div class="row" style="justify-content:space-between;align-items:center"><h3 style="margin:0">รายการข้อมูล (แก้ไข/ลบได้)</h3><button id="clearRecords" class="danger">ลบข้อมูล KPI เดือนนี้</button></div>
 <div style="overflow:auto"><table><thead><tr><th>วันที่</th><th>Act</th><th>Target</th><th>สีกราฟรายวัน</th><th>หมายเหตุ</th><th>จัดการ</th></tr></thead><tbody id="recordsBody"></tbody></table></div>
 </section>
 <p class="note">ฐานข้อมูลออนไลน์: Cloudflare D1 (ฐานข้อมูลแบบ SQLite) • ข้อมูลบันทึกอัตโนมัติและใช้ร่วมกันได้เมื่อเปิดเว็บไซต์เดียวกัน • ใช้ปุ่ม “บันทึกเป็น Excel” เพื่อดาวน์โหลดไฟล์ .xlsx</p><p id="dbStatus" class="note">กำลังเชื่อมต่อฐานข้อมูล SQLite…</p>
@@ -55,7 +63,20 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 let state=JSON.parse(localStorage.getItem('ohkpi_v1')||'null')||{title:'OH Daily KPI Dashboard',metrics:[{id:uid(),name:'อัตราการชำแหละบนราว',unit:'ตัว/MH',target:96.88,color:'#12a45a',records:[]}],selected:null};
 if(!state.selected)state.selected=state.metrics[0].id;
 function save(){localStorage.setItem('ohkpi_v1',JSON.stringify(state));render();syncToSQLite()}
-let syncTimer=null,remoteReady=false;
+function currentMonth(){
+ const d=new Date();
+ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+
+let selectedMonth=currentMonth();
+let remoteReady=false;
+let syncTimer=null;
+
+function recordsOfMonth(m){
+ return (m.records||[]).filter(d=>
+  String(d.date||'').slice(0,7)===selectedMonth
+ );
+}
 async function syncToSQLite(){if(!remoteReady)return;clearTimeout(syncTimer);syncTimer=setTimeout(async()=>{try{const r=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});if(!r.ok)throw new Error('HTTP '+r.status);$('dbStatus').textContent='เชื่อมต่อฐานข้อมูลออนไลน์แล้ว • บันทึกข้อมูลล่าสุดเรียบร้อย';}catch(e){$('dbStatus').textContent='บันทึกฐานข้อมูลออนไลน์ไม่สำเร็จ กรุณาตรวจสอบการตั้งค่า Cloudflare Pages และ D1';}},250)}
 async function initSQLite(){try{const r=await fetch('/api/state');if(!r.ok)throw new Error('HTTP '+r.status);const remote=await r.json();if(remote && remote.metrics && remote.metrics.length){state=remote;if(!state.selected||!state.metrics.some(m=>m.id===state.selected))state.selected=state.metrics[0]?.id;}else{const seed=await fetch('/api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state)});if(!seed.ok)throw new Error('Initial save HTTP '+seed.status);}remoteReady=true;localStorage.setItem('ohkpi_v1',JSON.stringify(state));render();$('dbStatus').textContent='เชื่อมต่อฐานข้อมูลออนไลน์แล้ว • บันทึกข้อมูลอัตโนมัติ';}catch(e){$('dbStatus').textContent='ยังเชื่อมต่อฐานข้อมูลออนไลน์ไม่ได้ • ตรวจสอบว่าติดตั้ง Cloudflare Pages Functions และผูก D1 แล้ว';render();}}
 function metric(){return state.metrics.find(m=>m.id===state.selected)||state.metrics[0]}
@@ -117,18 +138,58 @@ function drawMetric(m,idx){
  return parts.join('');
 }
 function renderDashboard(){
+ $('monthFilter').value=selectedMonth;
+
  $('dashboard').innerHTML=state.metrics.map((m,i)=>{
- let passed=m.records.filter(d=>+d.act>=(+d.target||+m.target)).length;
- const daysShown=m.summaryDaysOverride??m.records.length, passedShown=m.summaryPassedOverride??passed;
- return `<section class="panel metric-card" draggable="true" data-metric-card="${m.id}" style="margin:0 0 14px;padding:14px">
- <div class="metrichead" style="justify-content:space-between"><div><strong>${esc(m.name)}</strong> <span class="note">(${esc(m.unit)})</span><span class="order-hint">↕ ลากเพื่อจัดลำดับ</span></div><button class="pill" data-editsummary="${m.id}" title="คลิกเพื่อแก้จำนวนวัน/วันที่ผ่าน Target">${daysShown} วัน | ผ่าน Target ${passedShown} วัน ✎</button></div>
- <div class="chartwrap"><svg viewBox="0 0 ${Math.max(1000, m.records.length*72+86)} 350" role="img" aria-label="${esc(m.name)}">${drawMetric(m,i)}</svg></div>
- <div class="chart-note-wrap"><div class="chart-note-box"><label for="chartnote-${m.id}">Text note</label><textarea id="chartnote-${m.id}" data-chartnote="${m.id}" placeholder="พิมพ์หมายเหตุใต้กราฟนี้...">${esc(m.chartNote||"")}</textarea></div></div>
- <div class="toolbar"><button data-select="${m.id}">กรอก/แก้ไขข้อมูล KPI นี้</button><button data-editmetric="${m.id}">แก้ชื่อ/Target/หน่วย</button><button class="danger" data-removemetric="${m.id}">ลบกราฟนี้</button></div>
- </section>`}).join('');
+  const viewMetric={...m,records:recordsOfMonth(m)};
+
+  let passed=viewMetric.records.filter(d=>
+   +d.act >= (d.target==null?(+m.target||0):+d.target)
+  ).length;
+
+const monthSummary=m.summaryByMonth?.[selectedMonth]||{};
+const daysShown=monthSummary.days??viewMetric.records.length;
+const passedShown=monthSummary.passed??passed;
+
+  return `<section class="panel metric-card" draggable="true"
+   data-metric-card="${m.id}" style="margin:0 0 14px;padding:14px">
+
+   <div class="metrichead" style="justify-content:space-between">
+    <div>
+     <strong>${esc(m.name)}</strong>
+     <span class="note">(${esc(m.unit)})</span>
+     <span class="order-hint">↕ ลากเพื่อจัดลำดับ</span>
+    </div>
+    <button class="pill" data-editsummary="${m.id}">
+     ${daysShown} วัน | ผ่าน Target ${passedShown} วัน ✎
+    </button>
+   </div>
+
+   <div class="chartwrap">
+    <svg viewBox="0 0 ${Math.max(1000,viewMetric.records.length*72+86)} 350"
+     role="img" aria-label="${esc(m.name)}">
+     ${drawMetric(viewMetric,i)}
+    </svg>
+   </div>
+
+   <div class="chart-note-wrap">
+    <div class="chart-note-box">
+     <label for="chartnote-${m.id}">Text note</label>
+     <textarea id="chartnote-${m.id}" data-chartnote="${m.id}"
+      placeholder="พิมพ์หมายเหตุใต้กราฟนี้...">${esc(m.chartNote||"")}</textarea>
+    </div>
+   </div>
+
+   <div class="toolbar">
+    <button data-select="${m.id}">กรอก/แก้ไขข้อมูล KPI นี้</button>
+    <button data-editmetric="${m.id}">แก้ชื่อ/Target/หน่วย</button>
+    <button class="danger" data-removemetric="${m.id}">ลบกราฟนี้</button>
+   </div>
+  </section>`;
+ }).join('');
 }
 function renderRows(){
- let m=metric();$('recordsBody').innerHTML=[...m.records].sort((a,b)=>b.date.localeCompare(a.date)).map(d=>`<tr>
+ let m=metric();$('recordsBody').innerHTML=[...recordsOfMonth(m)].sort((a,b)=>b.date.localeCompare(a.date)).map(d=>`<tr>
  <td><input type="date" value="${esc(d.date)}" data-id="${d.id}" data-field="date"></td>
  <td><input type="number" step="any" value="${esc(d.act)}" data-id="${d.id}" data-field="act"></td>
  <td><input type="number" step="any" value="${esc(d.target??'')}" placeholder="${m.target}" data-id="${d.id}" data-field="target"></td>
@@ -136,12 +197,57 @@ function renderRows(){
  <td><input value="${esc(d.note)}" data-id="${d.id}" data-field="note"></td>
  <td><button class="danger" data-delete="${d.id}">ลบ</button></td></tr>`).join('');
 }
-$('metricSelect').onchange=e=>{state.selected=e.target.value;render()};
+$('monthFilter').onchange=e=>{
+ if(!e.target.value)return;
+ selectedMonth=e.target.value;
+ render();
+};$('metricSelect').onchange=e=>{
+ state.selected=e.target.value;
+ render();
+};
 $('saveMetric').onclick=()=>{let m=metric();state.title=$('titleInput').value;m.target=+$('targetInput').value||0;m.unit=$('unitInput').value;m.color=$('barColor').value;save()};
 $('addMetric').onclick=()=>{let name=prompt('ชื่อ KPI ใหม่:','KPI ใหม่');if(!name)return;let m={id:uid(),name,unit:'หน่วย',target:0,color:'#12a45a',records:[]};state.metrics.push(m);state.selected=m.id;save()};
 $('deleteMetric').onclick=()=>{if(state.metrics.length<2){alert('ต้องมี KPI อย่างน้อย 1 รายการ');return}if(confirm('ลบ KPI และข้อมูลทั้งหมดของ KPI นี้?')){state.metrics=state.metrics.filter(m=>m.id!==state.selected);state.selected=state.metrics[0].id;save()}};
-$('dateInput').value=new Date().toISOString().slice(0,10);
-$('addRecord').onclick=()=>{let m=metric(),date=$('dateInput').value,act=$('actInput').value;if(!date||act===''){alert('กรุณากรอกวันที่และ Act');return}let old=m.records.find(d=>d.date===date),rec={id:old?.id||uid(),date,act:+act,target:$('dayTargetInput').value===''?null:+$('dayTargetInput').value,note:$('noteInput').value};if(old)Object.assign(old,rec);else m.records.push(rec);$('actInput').value='';$('dayTargetInput').value='';$('noteInput').value='';save()};
+function todayLocal(){
+ const d=new Date();
+ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+$('dateInput').value=todayLocal();
+$('addRecord').onclick=()=>{
+ let m=metric();
+ let date=$('dateInput').value;
+ let act=$('actInput').value;
+
+ if(!date||act===''){
+  alert('กรุณากรอกวันที่และ Act');
+  return;
+ }
+
+ let old=m.records.find(d=>d.date===date);
+
+ let rec={
+  id:old?.id||uid(),
+  date,
+  act:+act,
+  target:$('dayTargetInput').value===''?null:+$('dayTargetInput').value,
+  note:$('noteInput').value,
+  color:old?.color
+ };
+
+ if(old){
+  Object.assign(old,rec);
+ }else{
+  m.records.push(rec);
+ }
+
+ selectedMonth=date.slice(0,7);
+
+ $('actInput').value='';
+ $('dayTargetInput').value='';
+ $('noteInput').value='';
+
+ save();
+};
 // ลากย้ายตัวเลข Act และ Target Dynamic ได้โดยตรงบนกราฟ
 let labelDrag=null;
 function svgPoint(svg,evt){let p=svg.createSVGPoint();p.x=evt.clientX;p.y=evt.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
@@ -170,7 +276,38 @@ $('dashboard').addEventListener('pointercancel',finishLabelDrag);
 $('dashboard').onclick=e=>{
  let sel=e.target.dataset.select,edit=e.target.dataset.editmetric,del=e.target.dataset.removemetric,summary=e.target.dataset.editsummary;
  if(sel){state.selected=sel;render();$('metricSelect').value=sel;window.scrollTo({top:0,behavior:'smooth'});}
- if(summary){let m=state.metrics.find(x=>x.id===summary);if(!m)return;let days=prompt('จำนวนวันทั้งหมดที่ต้องการแสดง:',m.summaryDaysOverride??m.records.length);if(days===null)return;let passed=prompt('จำนวนวันที่ผ่าน Target ที่ต้องการแสดง:',m.summaryPassedOverride??m.records.filter(d=>+d.act>=(d.target==null?(+m.target||0):+d.target)).length);if(passed===null)return;m.summaryDaysOverride=days.trim()===''?null:Math.max(0,Math.floor(+days||0));m.summaryPassedOverride=passed.trim()===''?null:Math.max(0,Math.floor(+passed||0));save();}
+ if(summary){
+ let m=state.metrics.find(x=>x.id===summary);
+ if(!m)return;
+
+ if(!m.summaryByMonth)m.summaryByMonth={};
+
+ const monthRecords=recordsOfMonth(m);
+ const monthData=m.summaryByMonth[selectedMonth]||{};
+
+ let defaultPassed=monthRecords.filter(d=>
+  +d.act >= (d.target==null?(+m.target||0):+d.target)
+ ).length;
+
+ let days=prompt(
+  'จำนวนวันทั้งหมดที่ต้องการแสดง:',
+  monthData.days??monthRecords.length
+ );
+ if(days===null)return;
+
+ let passed=prompt(
+  'จำนวนวันที่ผ่าน Target ที่ต้องการแสดง:',
+  monthData.passed??defaultPassed
+ );
+ if(passed===null)return;
+
+ m.summaryByMonth[selectedMonth]={
+  days:days.trim()===''?null:Math.max(0,Math.floor(+days||0)),
+  passed:passed.trim()===''?null:Math.max(0,Math.floor(+passed||0))
+ };
+
+ save();
+}
  if(edit){let m=state.metrics.find(x=>x.id===edit);let name=prompt('ชื่อกราฟ:',m.name);if(name===null)return;let target=prompt('Target:',m.target);if(target===null)return;let unit=prompt('หน่วย:',m.unit);if(unit===null)return;m.name=name;m.target=+target||0;m.unit=unit;save();}
  if(del){if(state.metrics.length<2){alert('ต้องมี KPI อย่างน้อย 1 รายการ');return}if(confirm('ลบกราฟและข้อมูล KPI นี้ทั้งหมด?')){state.metrics=state.metrics.filter(m=>m.id!==del);if(state.selected===del)state.selected=state.metrics[0].id;save();}}
 };
@@ -181,9 +318,42 @@ $('dashboard').addEventListener('dragend',e=>{const card=e.target.closest('[data
 $('dashboard').addEventListener('dragover',e=>{const card=e.target.closest('[data-metric-card]');if(!card||!draggedMetricId||card.dataset.metricCard===draggedMetricId)return;e.preventDefault();e.dataTransfer.dropEffect='move';$('dashboard').querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));card.classList.add('drag-over');});
 $('dashboard').addEventListener('drop',e=>{const card=e.target.closest('[data-metric-card]');if(!card||!draggedMetricId||card.dataset.metricCard===draggedMetricId)return;e.preventDefault();const from=state.metrics.findIndex(m=>m.id===draggedMetricId),to=state.metrics.findIndex(m=>m.id===card.dataset.metricCard);if(from<0||to<0)return;const [moving]=state.metrics.splice(from,1);state.metrics.splice(to,0,moving);save();});
 $('dashboard').addEventListener('change',e=>{const id=e.target.dataset.chartnote;if(!id)return;const m=state.metrics.find(x=>x.id===id);if(m){m.chartNote=e.target.value;save();}});
-$('recordsBody').onchange=e=>{let id=e.target.dataset.id,field=e.target.dataset.field;if(!id||!field)return;let d=metric().records.find(x=>x.id===id);if(d){d[field]=(field==='act'||field==='target')?(e.target.value===''?null:+e.target.value):e.target.value;save()}};
+$('recordsBody').onchange=e=>{
+ let id=e.target.dataset.id;
+ let field=e.target.dataset.field;
+ if(!id||!field)return;
+
+ let d=metric().records.find(x=>x.id===id);
+
+ if(d){
+  d[field]=(field==='act'||field==='target')
+   ?(e.target.value===''?null:+e.target.value)
+   :e.target.value;
+
+  if(field==='date'&&d.date){
+   selectedMonth=d.date.slice(0,7);
+  }
+
+  save();
+ }
+};
 $('recordsBody').onclick=e=>{let id=e.target.dataset.delete;if(id&&confirm('ลบรายการนี้?')){metric().records=metric().records.filter(d=>d.id!==id);save()}};
-$('clearRecords').onclick=()=>{if(confirm('ลบข้อมูลรายวันทั้งหมดของ KPI นี้?')){metric().records=[];save()}};
+$('clearRecords').onclick=()=>{
+ const m=metric();
+ const count=recordsOfMonth(m).length;
+
+ if(!count){
+  alert('ไม่มีข้อมูลในเดือนที่เลือก');
+  return;
+ }
+
+ if(confirm('ยืนยันลบข้อมูล KPI นี้เฉพาะเดือน '+selectedMonth+' จำนวน '+count+' รายการ?')){
+  m.records=m.records.filter(d=>
+   String(d.date||'').slice(0,7)!==selectedMonth
+  );
+  save();
+ }
+};
 function csvEscape(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
 $('exportExcelBtn').onclick=async()=>{
   const btn=$('exportExcelBtn');
